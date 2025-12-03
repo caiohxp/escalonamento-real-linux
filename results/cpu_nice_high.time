@@ -1,8 +1,8 @@
-	Command being timed: "nice -n -10 ./cpu_bound 20"
-	User time (seconds): 17.21
-	System time (seconds): 2.68
+	Command being timed: "nice -n -15 ./cpu_bound 20"
+	User time (seconds): 17.28
+	System time (seconds): 2.46
 	Percent of CPU this job got: 99%
-	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:19.93
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:19.92
 	Average shared text size (kbytes): 0
 	Average unshared data size (kbytes): 0
 	Average stack size (kbytes): 0
