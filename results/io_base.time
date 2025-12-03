@@ -1,8 +1,8 @@
 	Command being timed: "./io_bound 20"
-	User time (seconds): 2.31
-	System time (seconds): 17.53
+	User time (seconds): 2.46
+	System time (seconds): 17.45
 	Percent of CPU this job got: 99%
-	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:19.94
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:19.93
 	Average shared text size (kbytes): 0
 	Average unshared data size (kbytes): 0
 	Average stack size (kbytes): 0
