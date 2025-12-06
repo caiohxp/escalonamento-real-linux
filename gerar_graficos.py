@@ -2,57 +2,61 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-INPUT_CSV = "dados_finais_validos.csv"
+INPUT_CSV = "dados_avancados.csv"
 
-def plotar_graficos():
+def gerar_graficos():
     try:
         df = pd.read_csv(INPUT_CSV)
-    except FileNotFoundError:
-        print("Erro: CSV não encontrado. Rode o script de analise.py primeiro.")
+    except:
+        print("Erro: CSV não encontrado.")
         return
 
     sns.set_theme(style="whitegrid")
-    
-    # --- GRÁFICO 1: O Efeito do NICE (Starvation) ---
-    plt.figure(figsize=(8, 6))
-    df_nice = df[df['Cenario'] == 'Prioridade (Nice)']
-    if not df_nice.empty:
-        ax = sns.barplot(data=df_nice, x='Processo', y='Producao', palette='viridis')
-        plt.title('Impacto Crítico da Prioridade (Nice) - Competição no Core 0')
-        plt.ylabel('Primos Encontrados')
-        plt.xlabel('')
-        # Adiciona os números nas barras
-        for i in ax.containers: ax.bar_label(i, fmt='%d')
-        plt.savefig('grafico_nice.png')
-        print("Gerado: grafico_nice.png")
 
-    # --- GRÁFICO 2: Real Time (FIFO vs RR) ---
-    plt.figure(figsize=(8, 6))
-    df_rt = df[df['Cenario'] == 'Real-Time']
-    if not df_rt.empty:
-        ax = sns.barplot(data=df_rt, x='Processo', y='Producao', palette='magma')
-        plt.title('Políticas Real-Time: FIFO vs Round Robin (Mesma Prioridade)')
+    # GRÁFICO 1: A Curva de Decaimento do Nice
+    # Mostra como o desempenho cai exponencialmente com o Nice
+    plt.figure(figsize=(10, 6))
+    df_prop = df[df['Cenario'] == 'Proporcionalidade'].sort_values('Producao', ascending=False)
+    if not df_prop.empty:
+        sns.barplot(data=df_prop, x='Tipo', y='Producao', palette='rocket')
+        plt.title('Validação dos Pesos do CFS: Nice 0 vs 10 vs 19')
         plt.ylabel('Primos Encontrados')
-        plt.xlabel('')
-        for i in ax.containers: ax.bar_label(i, fmt='%d')
-        plt.savefig('grafico_realtime.png')
-        print("Gerado: grafico_realtime.png")
+        plt.savefig('grafico_avancado_pesos.png')
+        print("Gerado: grafico_avancado_pesos.png")
 
-    # --- GRÁFICO 3: Baseline vs Misto ---
-    # Compara o desempenho do CPU Bound: Sozinho vs Com IO
+    # GRÁFICO 2: Stress Test (Fairness)
+    # Compara o Baseline (Sozinho) vs Média do Stress (Dividido por 5)
     plt.figure(figsize=(8, 6))
-    filtro = df['Processo'].isin(['Isolado', 'Processo CPU'])
-    df_mix = df[filtro].copy()
+    filtro = df['Tipo'].isin(['CPU Isolado', 'Processo Comum'])
+    df_stress = df[filtro].copy()
+    if not df_stress.empty:
+        # Adiciona coluna de expectativa (Ideal)
+        baseline = df_stress[df_stress['Tipo']=='CPU Isolado']['Producao'].max()
+        plt.axhline(baseline/5, color='r', linestyle='--', label='Ideal Teórico (1/5)')
+        
+        sns.barplot(data=df_stress, x='Tipo', y='Producao', palette='Blues_d')
+        plt.title('Eficiência do Escalonador sob Alta Carga (1 vs 5 Processos)')
+        plt.legend()
+        plt.savefig('grafico_avancado_stress.png')
+        print("Gerado: grafico_avancado_stress.png")
+
+    # GRÁFICO 3: Resiliência a I/O
+    # Compara CPU Isolado vs CPU com 1 I/O vs CPU com 4 I/Os
+    plt.figure(figsize=(10, 6))
+    # Criamos um dataframe manual para essa comparação específica cruzando cenários
+    val_base = df[df['Tipo']=='CPU Isolado']['Producao'].values[0]
+    val_1v1 = df[(df['Cenario']=='CPU vs IO (1v1)') & (df['Tipo']=='CPU')]['Producao'].values[0]
+    val_storm = df[df['Tipo']=='CPU (Alvo)']['Producao'].values[0] if not df[df['Tipo']=='CPU (Alvo)'].empty else 0
     
-    if not df_mix.empty:
-        ax = sns.barplot(data=df_mix, x='Cenario', y='Producao', color='royalblue')
-        plt.title('Impacto da Concorrência: CPU Isolada vs Concorrendo com IO')
-        plt.ylabel('Primos Encontrados')
-        plt.xlabel('')
-        plt.ylim(0, df_mix['Producao'].max() * 1.2) # Dá um espaço extra em cima
-        for i in ax.containers: ax.bar_label(i, fmt='%d')
-        plt.savefig('grafico_cpu_io.png')
-        print("Gerado: grafico_cpu_io.png")
+    comp_data = pd.DataFrame({
+        'Ambiente': ['Sozinho', 'Com 1 I/O', 'Com 4 I/Os (Tempestade)'],
+        'Performance': [val_base, val_1v1, val_storm]
+    })
+    
+    sns.barplot(data=comp_data, x='Ambiente', y='Performance', palette='Spectral')
+    plt.title('Robustez do Processo CPU-Bound contra Interrupções de I/O')
+    plt.savefig('grafico_avancado_io_storm.png')
+    print("Gerado: grafico_avancado_io_storm.png")
 
 if __name__ == "__main__":
-    plotar_graficos()
+    gerar_graficos()

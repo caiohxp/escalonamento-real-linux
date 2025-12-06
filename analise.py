@@ -2,75 +2,70 @@ import os
 import re
 import pandas as pd
 
-# Diretório onde estão os arquivos
 DIR_RESULTS = "results"
-OUTPUT_CSV = "dados_finais_validos.csv"
+OUTPUT_CSV = "dados_avancados.csv"
 
-# Mapeamento: Nome do arquivo -> (Cenário, Tipo de Processo)
-FILES_MAP = {
-    'cpu_base.out':       ('Baseline', 'Isolado'),
-    'cpu_nice_high.out':  ('Prioridade (Nice)', 'Alta Prio (-15)'),
-    'cpu_nice_low.out':   ('Prioridade (Nice)', 'Baixa Prio (15)'),
-    'cpu_fifo.out':       ('Real-Time', 'FIFO'),
-    'cpu_rr.out':         ('Real-Time', 'Round Robin'),
-    'cpu_vs_io_cpu.out':  ('CPU vs IO', 'Processo CPU'),
-    'cpu_vs_io_io.out':   ('CPU vs IO', 'Processo IO')
-}
+# Mapeia arquivos para categorias. Usamos regex para capturar os grupos.
+# (Cenário, Tipo)
+def classificar_arquivo(filename):
+    if 'base_cpu' in filename: return 'Baseline', 'CPU Isolado'
+    if 'base_io' in filename:  return 'Baseline', 'IO Isolado'
+    
+    if 'nice_high' in filename: return 'Competição (Nice)', 'Alta Prio (-15)'
+    if 'nice_low' in filename:  return 'Competição (Nice)', 'Baixa Prio (15)'
+    
+    if 'rt_rr' in filename:   return 'Real-Time', 'Round Robin'
+    if 'rt_fifo' in filename: return 'Real-Time', 'FIFO'
+    
+    if 'mix_1v1_cpu' in filename: return 'CPU vs IO (1v1)', 'CPU'
+    if 'mix_1v1_io' in filename:  return 'CPU vs IO (1v1)', 'IO'
+    
+    if 'prop_n0' in filename:  return 'Proporcionalidade', 'Nice 0 (Base)'
+    if 'prop_n10' in filename: return 'Proporcionalidade', 'Nice 10 (Médio)'
+    if 'prop_n19' in filename: return 'Proporcionalidade', 'Nice 19 (Min)'
+    
+    if 'stress_' in filename: return 'Stress Test (5x)', 'Processo Comum'
+    
+    if 'storm_cpu' in filename: return 'Tempestade I/O', 'CPU (Alvo)'
+    if 'storm_io_' in filename: return 'Tempestade I/O', 'IO (Ruído)'
+    
+    return None, None
 
 def ler_metricas(filepath):
-    """Extrai primes_found ou io_ops e o tempo de CPU"""
-    dados = {'valor': 0, 'cpu_user': 0.0}
-    
-    # 1. Ler valor de produção (primos ou io_ops) do .out
+    dados = {'valor': 0}
     if os.path.exists(filepath):
         with open(filepath, 'r') as f:
             content = f.read()
             match = re.search(r'(primes_found|io_ops)=(\d+)', content)
-            if match:
-                dados['valor'] = int(match.group(2))
-
-    # 2. Ler tempo de uso do .time (arquivo de mesmo nome com extensão trocada)
-    path_time = filepath.replace('.out', '.time')
-    if os.path.exists(path_time):
-        with open(path_time, 'r') as f:
-            content = f.read()
-            # Tenta pegar "User time" ou "Percent of CPU"
-            match_cpu = re.search(r'User time \(seconds\): ([\d\.]+)', content)
-            if match_cpu:
-                dados['cpu_user'] = float(match_cpu.group(1))
-            
-            # Pega percentual para validar
-            match_pct = re.search(r'Percent of CPU this job got: (\d+)%', content)
-            if match_pct:
-                dados['cpu_percent'] = int(match_pct.group(1))
-                
+            if match: dados['valor'] = int(match.group(2))
     return dados
 
 def main():
     registros = []
-    print(f"Lendo arquivos em '{DIR_RESULTS}'...")
+    print(f"Lendo pasta '{DIR_RESULTS}'...")
 
-    for filename, (cenario, tipo) in FILES_MAP.items():
+    for filename in os.listdir(DIR_RESULTS):
+        if not filename.endswith('.out'): continue
+        
+        cenario, tipo = classificar_arquivo(filename)
+        if not cenario: continue
+        
         path = os.path.join(DIR_RESULTS, filename)
         infos = ler_metricas(path)
         
-        # Se não achou o arquivo, avisa
-        if infos['valor'] == 0 and infos['cpu_user'] == 0:
-            print(f"⚠️ Aviso: Arquivo {filename} vazio ou ausente.")
-            continue
-
         registros.append({
             'Cenario': cenario,
-            'Processo': tipo,
-            'Producao': infos['valor'],
-            'Tempo_User': infos.get('cpu_user', 0),
-            'CPU_Percent': infos.get('cpu_percent', 0)
+            'Tipo': tipo,
+            'Producao': infos['valor']
         })
 
     df = pd.DataFrame(registros)
-    df.to_csv(OUTPUT_CSV, index=False)
-    print("\n✅ Sucesso! Tabela salva em:", OUTPUT_CSV)
-    print(df[['Cenario', 'Processo', 'Producao', 'CPU_Percent']])
+    # Tira a média dos grupos repetidos (ex: stress test tem 5 arquivos iguais)
+    df_final = df.groupby(['Cenario', 'Tipo'], as_index=False).mean()
+    
+    df_final.to_csv(OUTPUT_CSV, index=False)
+    print("Análise completa. Dados salvos em:", OUTPUT_CSV)
+    print(df_final)
 
 if __name__ == "__main__":
     main()

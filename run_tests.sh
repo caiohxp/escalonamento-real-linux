@@ -8,48 +8,62 @@ mkdir -p $RESULTS
 # Garante permissões
 chmod +x cpu_bound io_bound
 
-echo "=== INICIANDO BATERIA DE TESTES (Estratégia de Afinidade Pai) ==="
+echo "=== INICIANDO BATERIA DE TESTES AVANÇADA (NÍVEL HARD) ==="
 
-# Função para rodar competição forçada no Core 0
-run_competition() {
-    NAME=$1
-    CMD1=$2
-    OUT1=$3
-    CMD2=$4
-    OUT2=$5
-    
-    echo ">>> Rodando: $NAME..."
-    
-    # TRUQUE: Usamos 'taskset -c 0 sh -c ...' para criar um ambiente onde 
-    # TUDO o que roda lá dentro é obrigado a ficar no Core 0.
-    taskset -c 0 sh -c "
-        /usr/bin/time -v $CMD1 > $RESULTS/$OUT1.out 2> $RESULTS/$OUT1.time &
-        /usr/bin/time -v $CMD2 > $RESULTS/$OUT2.out 2> $RESULTS/$OUT2.time &
-        wait
-    "
-    echo "   Concluído."
-}
+# --- CENÁRIOS BÁSICOS (MANTIDOS) ---
+echo ">>> [1/7] Baseline (Isolados)..."
+taskset -c 0 /usr/bin/time -v ./cpu_bound $DURATION > $RESULTS/base_cpu.out 2> $RESULTS/base_cpu.time
+taskset -c 0 /usr/bin/time -v ./io_bound $DURATION > $RESULTS/base_io.out 2> $RESULTS/base_io.time
 
-# 1. BASELINE (Rodar isolado)
-echo ">>> [1/4] Baseline..."
-# Rodamos um de cada vez
-taskset -c 0 /usr/bin/time -v ./cpu_bound $DURATION > $RESULTS/cpu_base.out 2> $RESULTS/cpu_base.time
-taskset -c 0 /usr/bin/time -v ./io_bound $DURATION > $RESULTS/io_base.out 2> $RESULTS/io_base.time
+echo ">>> [2/7] Competição Simples (Nice -15 vs 15)..."
+taskset -c 0 /usr/bin/time -v nice -n -15 ./cpu_bound $DURATION > $RESULTS/nice_high.out 2> $RESULTS/nice_high.time &
+pid1=$!
+taskset -c 0 /usr/bin/time -v nice -n 15 ./cpu_bound $DURATION > $RESULTS/nice_low.out 2> $RESULTS/nice_low.time &
+pid2=$!
+wait $pid1 $pid2
 
-# 2. COMPETIÇÃO NICE
-# Note que tiramos o 'taskset' de dentro dos comandos, pois o pai já segura o Core 0
-run_competition "Nice High vs Low" \
-    "nice -n -15 ./cpu_bound $DURATION" "cpu_nice_high" \
-    "nice -n 15 ./cpu_bound $DURATION" "cpu_nice_low"
+echo ">>> [3/7] Real-Time (RR vs FIFO)..."
+taskset -c 0 /usr/bin/time -v chrt -r 50 ./cpu_bound $DURATION > $RESULTS/rt_rr.out 2> $RESULTS/rt_rr.time &
+pid3=$!
+taskset -c 0 /usr/bin/time -v chrt -f 50 ./cpu_bound $DURATION > $RESULTS/rt_fifo.out 2> $RESULTS/rt_fifo.time &
+pid4=$!
+wait $pid3 $pid4
 
-# 3. REAL-TIME
-run_competition "Real-Time (RR) vs FIFO" \
-    "chrt -r 50 ./cpu_bound $DURATION" "cpu_rr" \
-    "chrt -f 50 ./cpu_bound $DURATION" "cpu_fifo"
+echo ">>> [4/7] CPU vs IO (1v1)..."
+taskset -c 0 /usr/bin/time -v nice -n -10 ./cpu_bound $DURATION > $RESULTS/mix_1v1_cpu.out 2> $RESULTS/mix_1v1_cpu.time &
+pid5=$!
+taskset -c 0 /usr/bin/time -v nice -n 5 ./io_bound $DURATION > $RESULTS/mix_1v1_io.out 2> $RESULTS/mix_1v1_io.time &
+pid6=$!
+wait $pid5 $pid6
 
-# 4. CPU vs IO
-run_competition "CPU vs IO" \
-    "nice -n -10 ./cpu_bound $DURATION" "cpu_vs_io_cpu" \
-    "nice -n 5 ./io_bound $DURATION" "cpu_vs_io_io"
+# --- NOVOS CENÁRIOS AVANÇADOS ---
 
-echo "=== FIM DOS TESTES ==="
+echo ">>> [5/7] Proporcionalidade (Nice 0 vs 10 vs 19)..."
+# Testa se a CPU divide conforme os pesos: 1024 vs 110 vs 15
+taskset -c 0 /usr/bin/time -v nice -n 0 ./cpu_bound $DURATION > $RESULTS/prop_n0.out 2> $RESULTS/prop_n0.time &
+pA=$!
+taskset -c 0 /usr/bin/time -v nice -n 10 ./cpu_bound $DURATION > $RESULTS/prop_n10.out 2> $RESULTS/prop_n10.time &
+pB=$!
+taskset -c 0 /usr/bin/time -v nice -n 19 ./cpu_bound $DURATION > $RESULTS/prop_n19.out 2> $RESULTS/prop_n19.time &
+pC=$!
+wait $pA $pB $pC
+
+echo ">>> [6/7] Stress Test (5 CPU Bounds idênticos)..."
+# Testa a capacidade de manter 20% para cada um sem perdas
+for i in {1..5}; do
+    taskset -c 0 /usr/bin/time -v ./cpu_bound $DURATION > $RESULTS/stress_$i.out 2> $RESULTS/stress_$i.time &
+    pids[$i]=$!
+done
+wait ${pids[*]}
+
+echo ">>> [7/7] Tempestade de I/O (1 CPU vs 4 I/O)..."
+# Testa se o CPU bound consegue rodar no meio de muitas interrupções
+taskset -c 0 /usr/bin/time -v ./cpu_bound $DURATION > $RESULTS/storm_cpu.out 2> $RESULTS/storm_cpu.time &
+s1=$!
+for i in {1..4}; do
+    taskset -c 0 /usr/bin/time -v ./io_bound $DURATION > $RESULTS/storm_io_$i.out 2> $RESULTS/storm_io_$i.time &
+    spids[$i]=$!
+done
+wait $s1 ${spids[*]}
+
+echo "=== FIM DOS TESTES AVANÇADOS ==="

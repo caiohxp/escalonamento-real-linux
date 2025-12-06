@@ -1,0 +1,15 @@
+Cenario,Tipo,Producao
+Baseline,CPU Isolado,1197647.0
+Baseline,IO Isolado,5018019.0
+CPU vs IO (1v1),CPU,1158294.0
+CPU vs IO (1v1),IO,175879.0
+Competição (Nice),Alta Prio (-15),1190267.5
+Competição (Nice),Baixa Prio (15),4367.0
+Proporcionalidade,Nice 0 (Base),1107293.0
+Proporcionalidade,Nice 10 (Médio),218853.0
+Proporcionalidade,Nice 19 (Min),40965.0
+Real-Time,FIFO,1199340.0
+Real-Time,Round Robin,15476.0
+Stress Test (5x),Processo Comum,378668.8
+Tempestade I/O,CPU (Alvo),372964.0
+Tempestade I/O,IO (Ruído),993188.75
