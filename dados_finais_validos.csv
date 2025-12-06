@@ -1,0 +1,8 @@
+Cenario,Processo,Producao,Tempo_User,CPU_Percent
+Baseline,Isolado,1154552,19.92,99
+Prioridade (Nice),Alta Prio (-15),1174311,19.96,99
+Prioridade (Nice),Baixa Prio (15),4260,0.02,0
+Real-Time,FIFO,1198470,19.98,95
+Real-Time,Round Robin,120971,0.99,4
+CPU vs IO,Processo CPU,1094719,19.31,96
+CPU vs IO,Processo IO,187132,0.29,3
